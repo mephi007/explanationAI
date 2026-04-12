@@ -185,9 +185,12 @@ def run():
         from posters.staggered_poster import post_all_staggered
         results = post_all_staggered(question, part, TODAY, video_paths, copy_paths, carousel_paths)
     else:
-        results = {p: "dry_run" for p in ["yt_short_hook","yt_short_dry_run","yt_short_code",
-                                            "yt_short_dialogue","yt_long","ig_hook","ig_dry_run",
-                                            "ig_code","ig_dialogue","linkedin"]}
+        results = {p: "dry_run" for p in [
+            "yt_short_hook", "yt_short_dry_run", "yt_short_code", "yt_short_dialogue",
+            "yt_long",
+            "drive_ig_hook", "drive_ig_dry_run", "drive_ig_code", "drive_ig_dialogue",
+            "linkedin",
+        ]}
 
     # ── Step 10: Mark done ───────────────────────────────────────────
     if not DRY_RUN:

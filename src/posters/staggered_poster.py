@@ -1,14 +1,17 @@
 """
-staggered_poster.py — Posts 10 content pieces at staggered times.
+staggered_poster.py — Posts content pieces at staggered times.
 Called by 6 separate GitHub Actions cron jobs (not all at once).
 
 Posting schedule (IST):
   06:00 — YouTube long-form
-  07:00 — Instagram Short 1 (hook) + YouTube Short 1
+  07:00 — YouTube Short 1 (hook)   + Drive upload for IG Short 1
   08:00 — LinkedIn carousel
-  12:30 — Instagram Short 2 (dry_run) + YouTube Short 2
-  17:30 — Instagram Short 3 (code) + YouTube Short 3
-  21:00 — Instagram Short 4 (dialogue) + YouTube Short 4
+  12:30 — YouTube Short 2 (dry_run) + Drive upload for IG Short 2
+  17:30 — YouTube Short 3 (code)   + Drive upload for IG Short 3
+  21:00 — YouTube Short 4 (dialogue) + Drive upload for IG Short 4
+
+Instagram is NOT auto-posted. Videos + captions are uploaded to Google Drive
+(GOOGLE_DRIVE_FOLDER_ID) for manual review and posting.
 
 PLATFORM_SLOT env var tells this script which slot to run.
 """
@@ -26,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Importing platform-specific posters
 from posters.linkedin_poster import post_linkedin_carousel
-from posters.instagram_poster import post_instagram_reel
+from posters.drive_uploader import upload_instagram_content
 from posters.youtube_poster import post_youtube_video
 
 TODAY = os.environ.get("OVERRIDE_DATE", date.today().isoformat())
@@ -97,19 +100,26 @@ def _post_short_pair(short_type: str, question: dict, part: dict,
         if result.get("status") == "success":
             tg.send_post_result(f"YT Short {short_type}", "success", result.get("url", ""))
 
-    # Instagram Reel
+    # Instagram → Google Drive (manual posting)
     reel_path = video_paths.get(f"short_{short_type}_portrait")  # same file, square or portrait
     if reel_path and Path(reel_path).exists():
-        result = _safe_post(post_instagram_reel, reel_path, ig_caption, f"ig_{short_type}")
-        results[f"ig_{short_type}"] = result
+        result = _safe_post(
+            upload_instagram_content,
+            short_type, reel_path, ig_caption, cal_date,
+            f"drive_ig_{short_type}",  # platform label for _safe_post
+        )
+        results[f"drive_ig_{short_type}"] = result
         db.log_post(cal_date, question["slug"], part["part_number"],
                    f"instagram_{short_type}", result.get("status", "error"),
-                   result.get("id"), result.get("error"))
+                   result.get("video_link"), result.get("error"))
         if result.get("status") == "success":
-            tg.send_post_result(f"IG Reel {short_type}", "success")
+            tg.send_post_result(
+                f"IG {short_type} → Drive ✅",
+                "success",
+                result.get("folder_link", ""),
+            )
         elif result.get("status") == "error":
-            db.enqueue_retry(cal_date, f"instagram_{short_type}", reel_path, delay_minutes=30)
-            tg.send_error_alert(f"Instagram {short_type}", result.get("error", ""), cal_date)
+            tg.send_error_alert(f"Drive upload {short_type}", result.get("error", ""), cal_date)
 
 
 def _safe_post(fn, *args, **kwargs) -> dict:
