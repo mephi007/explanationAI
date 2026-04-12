@@ -1,0 +1,115 @@
+name: Sunday — Plan Week + Refresh Bank
+
+on:
+  schedule:
+    # Every Sunday 5:00 AM IST = Saturday 11:30 PM UTC
+    - cron: '30 23 * * 6'
+  workflow_dispatch:
+
+jobs:
+  plan-and-refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - run: pip install --quiet google-generativeai anthropic requests
+
+      - name: Build + validate question bank
+        run: |
+          cd src
+          python question_bank.py
+          python -c "
+          import question_bank as qb, db
+          db.init_db()
+          bank = qb.load_bank()
+          posted = db.get_posted_slugs()
+          remaining = [q for q in bank if q['slug'] not in posted]
+          print(f'Bank: {len(bank)} total, {len(posted)} posted, {len(remaining)} remaining')
+          cats = {}
+          for q in remaining:
+              cats[q['category']] = cats.get(q['category'],0)+1
+          for c,n in sorted(cats.items()):
+              print(f'  {c}: {n} remaining')
+          if len(remaining) < 50:
+              print('WARNING: Fewer than 50 questions remaining. Consider adding more.')
+          "
+        env:
+          DB_PATH: ${{ github.workspace }}/state.db
+
+      - name: Plan next week's calendar
+        run: |
+          cd src
+          python -c "
+          import sys
+          sys.path.insert(0,'intelligence')
+          from intelligence.calendar_planner import plan_week
+          from datetime import date, timedelta
+          # Find next Monday
+          today = date.today()
+          days_ahead = (7 - today.weekday()) % 7
+          if days_ahead == 0: days_ahead = 7
+          monday = today + timedelta(days=days_ahead)
+          plan = plan_week(monday)
+          print(f'Planned {len(plan)} days starting {monday}')
+          for p in plan:
+              print(f'  {p[\"cal_date\"]}: {p[\"question_slug\"]} (part {p[\"part_number\"]}/{p[\"total_parts\"]})')
+          "
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DB_PATH: ${{ github.workspace }}/state.db
+
+      - name: Send weekly preview to Telegram
+        run: |
+          cd src
+          python -c "
+          import db, telegram_bot as tg, json
+          from datetime import date, timedelta
+          today = date.today()
+          days_ahead = (7 - today.weekday()) % 7
+          if days_ahead == 0: days_ahead = 7
+          monday = today + timedelta(days=days_ahead)
+          
+          lines = ['📅 *Content Calendar — Week of ' + monday.isoformat() + '*\n']
+          days_en = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+          for offset in range(7):
+              d = (monday + timedelta(days=offset)).isoformat()
+              entry = db.get_calendar_entry(d)
+              if entry:
+                  q = db.get_question(entry['question_slug'])
+                  title = q['title'] if q else entry['question_slug']
+                  part_str = f' (Part {entry[\"part_number\"]}/{entry[\"total_parts\"]})' if entry['total_parts'] > 1 else ''
+                  lines.append(f'*{days_en[offset]} {d}*: {title}{part_str}')
+              else:
+                  lines.append(f'*{days_en[offset]} {d}*: Not planned')
+          
+          lines.append('\nReply /swap to change any day.')
+          tg.send_text('\n'.join(lines))
+          "
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DB_PATH: ${{ github.workspace }}/state.db
+        continue-on-error: true  # don't fail if Telegram not configured
+
+      - name: Commit updated state + bank
+        run: |
+          git config user.name "dsa-bot"
+          git config user.email "dsa-bot@users.noreply.github.com"
+          git add state.db questions/bank.json
+          git diff --cached --quiet || (git commit -m "chore: weekly plan + bank refresh [skip ci]" && git push)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

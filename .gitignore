@@ -1,0 +1,34 @@
+# Generated content (never commit — videos are large and ephemeral)
+output/
+*.mp4
+*.wav
+*.pdf
+*.png
+!src/questions/bank.json    # bank.json IS committed
+
+# Secrets
+.env
+*.env
+credentials.json
+token.json
+client_secret*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/
+env/
+
+# state.db IS committed (it's your posting history + calendar)
+# Do not add state.db here
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
