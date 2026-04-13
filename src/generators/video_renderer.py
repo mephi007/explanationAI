@@ -113,7 +113,7 @@ Keep each line under 20 words.""",
     }
 
     resp = _client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-1.5-flash",
         contents=prompts.get(short_type, prompts["dry_run"]),
         config=types.GenerateContentConfig(
             temperature=0.5,

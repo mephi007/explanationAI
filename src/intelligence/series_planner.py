@@ -14,7 +14,7 @@ import db
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 _client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL = "gemini-2.0-flash"
+MODEL = "gemini-1.5-flash"
 
 DEPTH_THRESHOLD = 7   # >= this → multi-part series
 
