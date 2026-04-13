@@ -23,7 +23,7 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - run: pip install --quiet google-generativeai anthropic requests
+      - run: pip install --quiet google-genai anthropic requests
 
       - name: Build + validate question bank
         run: |

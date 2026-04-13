@@ -19,11 +19,11 @@ import subprocess
 import numpy as np
 from pathlib import Path
 from datetime import datetime
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 KOKORO_VOICE_A = os.environ.get("KOKORO_VOICE_A", "am_adam")      # interviewer / narrator
 KOKORO_VOICE_B = os.environ.get("KOKORO_VOICE_B", "af_heart")     # candidate / secondary
@@ -112,10 +112,13 @@ Topic: {part['short_angles']['dialogue']}
 Keep each line under 20 words.""",
     }
 
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    resp = model.generate_content(
-        prompts.get(short_type, prompts["dry_run"]),
-        generation_config=genai.GenerationConfig(temperature=0.5, max_output_tokens=512)
+    resp = _client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompts.get(short_type, prompts["dry_run"]),
+        config=types.GenerateContentConfig(
+            temperature=0.5,
+            max_output_tokens=512,
+        ),
     )
     return resp.text.strip()
 

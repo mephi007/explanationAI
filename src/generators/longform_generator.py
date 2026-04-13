@@ -7,11 +7,12 @@ Includes chapter markers for YouTube timestamps.
 import os
 import re
 import json
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-genai.configure(api_key=GEMINI_API_KEY)
-MODEL = "gemini-1.5-flash"
+_client = genai.Client(api_key=GEMINI_API_KEY)
+MODEL = "gemini-2.0-flash"
 
 LONGFORM_SYSTEM = """You are an expert Manim scriptwriter for long-form DSA/System Design educational videos.
 Style: 3Blue1Brown whiteboard — clean, deliberate, every animation serves understanding.
@@ -87,10 +88,14 @@ Java code:
 
 The class must be named `LongFormScene`."""
 
-    model = genai.GenerativeModel(model_name=MODEL, system_instruction=LONGFORM_SYSTEM)
-    resp = model.generate_content(
-        user_prompt,
-        generation_config=genai.GenerationConfig(temperature=0.25, max_output_tokens=8192)
+    resp = _client.models.generate_content(
+        model=MODEL,
+        contents=user_prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=LONGFORM_SYSTEM,
+            temperature=0.25,
+            max_output_tokens=8192,
+        ),
     )
 
     script = resp.text.strip()

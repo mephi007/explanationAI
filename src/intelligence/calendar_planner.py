@@ -7,14 +7,14 @@ import os
 import json
 import random
 from datetime import date, timedelta
-import google.generativeai as genai
+from google import genai
 import db
 import sys
 sys.path.insert(0, "..")
 import question_bank as qb
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-genai.configure(api_key=GEMINI_API_KEY)
+_client = genai.Client(api_key=GEMINI_API_KEY)
 
 # Weekly content quotas
 WEEKLY_QUOTA = {

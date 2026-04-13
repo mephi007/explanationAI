@@ -12,11 +12,12 @@ Short types:
 import os
 import re
 import json
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-genai.configure(api_key=GEMINI_API_KEY)
-MODEL = "gemini-1.5-flash"
+_client = genai.Client(api_key=GEMINI_API_KEY)
+MODEL = "gemini-2.0-flash"
 
 # ─── Shared Manim spec injected into every prompt ────────────────────────────
 MANIM_SPEC = """
@@ -97,10 +98,14 @@ Structure:
 # ─── Generator ────────────────────────────────────────────────────────────────
 
 def _call_gemini(system: str, user: str) -> str:
-    model = genai.GenerativeModel(model_name=MODEL, system_instruction=system)
-    resp = model.generate_content(
-        user,
-        generation_config=genai.GenerationConfig(temperature=0.3, max_output_tokens=4096)
+    resp = _client.models.generate_content(
+        model=MODEL,
+        contents=user,
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            temperature=0.3,
+            max_output_tokens=4096,
+        ),
     )
     raw = resp.text.strip()
     raw = re.sub(r'^```python\n?', '', raw)

@@ -8,12 +8,13 @@ import os
 import json
 import re
 from datetime import date, timedelta
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import db
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-genai.configure(api_key=GEMINI_API_KEY)
-MODEL = "gemini-1.5-flash"
+_client = genai.Client(api_key=GEMINI_API_KEY)
+MODEL = "gemini-2.0-flash"
 
 DEPTH_THRESHOLD = 7   # >= this → multi-part series
 
@@ -71,10 +72,13 @@ Return ONLY valid JSON array:
   ...
 ]"""
 
-    model = genai.GenerativeModel(model_name=MODEL)
-    resp = model.generate_content(
-        prompt,
-        generation_config=genai.GenerationConfig(temperature=0.4, max_output_tokens=2048)
+    resp = _client.models.generate_content(
+        model=MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.4,
+            max_output_tokens=2048,
+        ),
     )
     raw = resp.text.strip()
     raw = re.sub(r'^```json\n?', '', raw)
