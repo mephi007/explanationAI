@@ -485,6 +485,18 @@ def build_bank():
     os.makedirs("questions", exist_ok=True)
     with open(BANK_PATH, "w") as f:
         json.dump(QUESTIONS, f, indent=2)
+
+    # Sync all questions into SQLite so count_questions() returns real numbers
+    try:
+        import db as _db
+        _db.init_db()
+        now = datetime.utcnow().isoformat()
+        for q in QUESTIONS:
+            _db.upsert_question({**q, "added_at": now})
+        print(f"Synced {len(QUESTIONS)} questions to DB")
+    except Exception as e:
+        print(f"DB sync skipped (non-fatal): {e}")
+
     cats = {}
     for q in QUESTIONS:
         cats[q["category"]] = cats.get(q["category"], 0) + 1

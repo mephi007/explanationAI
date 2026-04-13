@@ -207,12 +207,18 @@ def generate_youtube_metadata(question: dict, part: dict, video_type: str) -> di
                  question.get("pattern", "").replace("_", " "),
                  question["title"].lower()[:30]]
 
+    label = "🔴 LIVE INTERVIEW" if video_type == "short_dialogue" else "📚 LEARN"
+    vid_word = "short" if "short" in video_type else "video"
+    timestamps = (
+        "⏱ Timestamps\n0:00 Problem setup\n1:00 Dry run\n"
+        "2:30 Optimal approach\n4:00 Code walkthrough\n\n"
+    ) if video_type == "long" else ""
     description = (
-        f"{'🔴 LIVE INTERVIEW' if video_type == 'short_dialogue' else '📚 LEARN'}: {question['title']}\n\n"
-        f"This {'short' if 'short' in video_type else 'video'} covers: {part.get('part_focus', question.get('description',''))[:200]}\n\n"
-        f"Companies that ask this: {question.get('companies','').replace(',', ' · ').upper()}\n"
-        f"Pattern: {pattern} | Difficulty: {question.get('difficulty','').upper()}\n\n"
-        f"{'⏱ Timestamps\\n0:00 Problem setup\\n1:00 Dry run\\n2:30 Optimal approach\\n4:00 Code walkthrough\\n' if video_type == 'long' else ''}"
+        f"{label}: {question['title']}\n\n"
+        f"This {vid_word} covers: {part.get('part_focus', question.get('description', ''))[:200]}\n\n"
+        f"Companies that ask this: {question.get('companies', '').replace(',', ' · ').upper()}\n"
+        f"Pattern: {pattern} | Difficulty: {question.get('difficulty', '').upper()}\n\n"
+        f"{timestamps}"
         f"Subscribe for daily FAANG patterns 👆"
     )[:5000]
 
