@@ -150,62 +150,68 @@ def run():
     copy_dir = f"{OUTPUT_DIR}/copy"
     copy_paths = generate_all_copy(question, part, copy_dir)
 
-    # ── Step 8: Telegram preview ─────────────────────────────────────
-    banner("8/8", "Telegram preview + approval")
-    if not DRY_RUN:
-        msg_id = tg.send_morning_preview(
-            question, part, TODAY, video_paths, copy_paths, carousel_paths
-        )
-        db.set_calendar_entry(TODAY, slug, part_num, total_parts, telegram_msg_id=msg_id)
-
-        decision = tg.wait_for_approval(TODAY, timeout_minutes=30)
-        print(f"  Decision: {decision}")
-
-        if decision == "skip":
-            print("  Skipped by user. Exiting.")
-            return
-        elif decision == "reschedule":
-            print("  Rescheduled. Exiting.")
-            return
-        elif decision.startswith("regen:"):
-            regen_type = decision.split(":")[1]
-            print(f"  Regen requested: {regen_type}. Re-running relevant step...")
-            # Simplified: just re-run copy if 'copy', else re-run all
-            if regen_type == "copy":
-                copy_paths = generate_all_copy(question, part, copy_dir)
-            # Re-send preview
-            tg.send_morning_preview(question, part, TODAY, video_paths, copy_paths, carousel_paths)
-            tg.wait_for_approval(TODAY, timeout_minutes=20)
+    # ── Step 8: Telegram preview (optional, non-blocking) ────────────
+    banner("8/9", "Telegram preview")
+    HAS_TELEGRAM = bool(os.environ.get("TELEGRAM_BOT_TOKEN") and os.environ.get("TELEGRAM_CHAT_ID"))
+    if DRY_RUN:
+        print("  DRY_RUN — skipping Telegram.")
+    elif HAS_TELEGRAM:
+        try:
+            msg_id = tg.send_morning_preview(
+                question, part, TODAY, video_paths, copy_paths, carousel_paths
+            )
+            db.set_calendar_entry(TODAY, slug, part_num, total_parts, telegram_msg_id=msg_id)
+            print("  Preview sent to Telegram.")
+        except Exception as e:
+            print(f"  Telegram preview failed (non-fatal): {e}")
     else:
-        print("  DRY_RUN — skipping Telegram and posting.")
+        print("  TELEGRAM_BOT_TOKEN not set — skipping preview.")
 
-    # ── Step 9: Post at staggered times ──────────────────────────────
+    # ── Step 9: Upload all content to Google Drive ────────────────────
+    banner("9/9", "Uploading all content to Google Drive")
+    results = {}
     if not DRY_RUN:
-        db.set_calendar_status(TODAY, "posting")
-        from posters.staggered_poster import post_all_staggered
-        results = post_all_staggered(question, part, TODAY, video_paths, copy_paths, carousel_paths)
+        db.set_calendar_status(TODAY, "uploading")
+        try:
+            from posters.drive_uploader import upload_all_to_drive
+            results = upload_all_to_drive(
+                question, part, TODAY, video_paths, copy_paths, carousel_paths
+            )
+            print(f"  Uploaded: {len(results.get('uploaded', []))} files")
+            if results.get("errors"):
+                print(f"  Errors:   {results['errors']}")
+
+            final_status = "done" if results["status"] == "success" else "partial"
+            db.set_calendar_status(TODAY, final_status)
+
+            if HAS_TELEGRAM:
+                try:
+                    err_note = f", {len(results['errors'])} errors" if results.get("errors") else ""
+                    tg.send_text(
+                        f"✅ *Content ready — {TODAY}*\n"
+                        f"*{question['title']}* — Part {part_num}/{total_parts}\n\n"
+                        f"📁 [All files]({results['date_folder_link']})\n"
+                        f"▶️ [YouTube]({results['youtube_folder_link']})\n"
+                        f"📸 [Instagram]({results['instagram_folder_link']})\n"
+                        f"💼 [LinkedIn]({results['linkedin_folder_link']})\n\n"
+                        f"_{len(results.get('uploaded', []))} files uploaded{err_note}_"
+                    )
+                except Exception as e:
+                    print(f"  Telegram summary failed (non-fatal): {e}")
+
+        except Exception as e:
+            print(f"  Drive upload failed: {e}")
+            db.set_calendar_status(TODAY, "failed")
+            if HAS_TELEGRAM:
+                try:
+                    tg.send_error_alert("Drive upload", str(e), TODAY)
+                except Exception:
+                    pass
     else:
-        results = {p: "dry_run" for p in [
-            "yt_short_hook", "yt_short_dry_run", "yt_short_code", "yt_short_dialogue",
-            "yt_long",
-            "drive_ig_hook", "drive_ig_dry_run", "drive_ig_code", "drive_ig_dialogue",
-            "linkedin",
-        ]}
+        results = {"status": "dry_run", "uploaded": [], "errors": []}
+        print("  DRY_RUN — skipping Drive upload.")
 
-    # ── Step 10: Mark done ───────────────────────────────────────────
-    if not DRY_RUN:
-        success_count = sum(1 for v in results.values() if isinstance(v, dict) and v.get("status") == "success")
-        status = "done" if success_count > 0 else "failed"
-        db.set_calendar_status(TODAY, status)
-        tg.send_text(
-            f"{'✅' if status == 'done' else '❌'} *Posting complete — {TODAY}*\n"
-            f"*{question['title']}* Part {part_num}/{total_parts}\n\n"
-            + "\n".join(f"{'✓' if isinstance(v,dict) and v.get('status')=='success' else '✗'} {k}: "
-                       f"{v.get('url','') if isinstance(v,dict) else v}"
-                       for k, v in results.items())
-        )
-
-    banner("DONE", f"{question['title']} | {success_count if not DRY_RUN else 'dry_run'} platforms ✓")
+    banner("DONE", f"{question['title']} | Part {part_num}/{total_parts} | {results.get('status', 'unknown')}")
 
 
 if __name__ == "__main__":

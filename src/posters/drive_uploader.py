@@ -1,10 +1,31 @@
 """
-drive_uploader.py — Uploads Instagram content to Google Drive for manual posting.
+drive_uploader.py — Uploads all generated content to Google Drive for manual posting.
 
 Uses a Google service account (GOOGLE_SERVICE_ACCOUNT_JSON env var — full JSON string).
 Folder layout inside GOOGLE_DRIVE_FOLDER_ID:
-  [root folder] / [YYYY-MM-DD] / short_{type}.mp4
-                               / ig_{type}_caption.txt
+
+  [root folder] /
+    └── YYYY-MM-DD /
+          ├── youtube /
+          │     ├── long_form.mp4
+          │     ├── short_hook.mp4
+          │     ├── short_dry_run.mp4
+          │     ├── short_code.mp4
+          │     ├── short_dialogue.mp4
+          │     ├── thumbnail.jpg
+          │     └── metadata.json   ← titles, descriptions, tags
+          ├── instagram /
+          │     ├── short_hook.mp4
+          │     ├── short_dry_run.mp4
+          │     ├── short_code.mp4
+          │     ├── short_dialogue.mp4
+          │     ├── caption_hook.txt
+          │     ├── caption_dry_run.txt
+          │     ├── caption_code.txt
+          │     └── caption_dialogue.txt
+          └── linkedin /
+                ├── carousel.pdf
+                └── caption.txt
 """
 
 import io
@@ -135,4 +156,152 @@ def upload_instagram_content(
         "video_link": video_link,
         "caption_link": caption_link,
         "folder_link": folder_link,
+    }
+
+
+def upload_all_to_drive(
+    question: dict,
+    part: dict,
+    cal_date: str,
+    video_paths: dict,
+    copy_paths: dict,
+    carousel_paths: dict,
+) -> dict:
+    """
+    Upload all generated content to Google Drive organised by platform.
+
+    Returns:
+        {
+            "status": "success" | "partial",
+            "date_folder_link": ...,
+            "youtube_folder_link": ...,
+            "instagram_folder_link": ...,
+            "linkedin_folder_link": ...,
+            "uploaded": [list of relative paths uploaded],
+            "errors": [list of error strings],
+        }
+    """
+    if not DRIVE_FOLDER_ID():
+        raise RuntimeError("GOOGLE_DRIVE_FOLDER_ID env var is not set")
+    if not SERVICE_ACCOUNT_JSON():
+        raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON env var is not set")
+
+    from googleapiclient.http import MediaFileUpload
+
+    service = _get_drive_service()
+    uploaded = []
+    errors = []
+
+    # ── Root date folder ─────────────────────────────────────────────
+    date_folder_id = _get_or_create_folder(service, cal_date, DRIVE_FOLDER_ID())
+    date_folder_link = f"https://drive.google.com/drive/folders/{date_folder_id}"
+    print(f"[drive] Date folder: {date_folder_link}")
+
+    # ── YouTube ──────────────────────────────────────────────────────
+    yt_folder_id = _get_or_create_folder(service, "youtube", date_folder_id)
+    yt_folder_link = f"https://drive.google.com/drive/folders/{yt_folder_id}"
+
+    yt_videos = {
+        "long_form.mp4":        video_paths.get("long"),
+        "short_hook.mp4":       video_paths.get("short_hook_portrait"),
+        "short_dry_run.mp4":    video_paths.get("short_dry_run_portrait"),
+        "short_code.mp4":       video_paths.get("short_code_portrait"),
+        "short_dialogue.mp4":   video_paths.get("short_dialogue_portrait"),
+    }
+    for dest_name, src_path in yt_videos.items():
+        if src_path and Path(src_path).exists():
+            try:
+                meta = {"name": dest_name, "parents": [yt_folder_id]}
+                media = MediaFileUpload(src_path, mimetype="video/mp4", resumable=True)
+                f = service.files().create(body=meta, media_body=media, fields="id").execute()
+                _share_anyone(service, f["id"])
+                uploaded.append(f"youtube/{dest_name}")
+                print(f"[drive] youtube/{dest_name} ✓")
+            except Exception as e:
+                errors.append(f"youtube/{dest_name}: {e}")
+
+    thumb_path = video_paths.get("thumbnail")
+    if thumb_path and Path(thumb_path).exists():
+        try:
+            meta = {"name": "thumbnail.jpg", "parents": [yt_folder_id]}
+            media = MediaFileUpload(thumb_path, mimetype="image/jpeg", resumable=False)
+            f = service.files().create(body=meta, media_body=media, fields="id").execute()
+            _share_anyone(service, f["id"])
+            uploaded.append("youtube/thumbnail.jpg")
+        except Exception as e:
+            errors.append(f"youtube/thumbnail: {e}")
+
+    yt_meta_path = copy_paths.get("youtube")
+    if yt_meta_path and Path(yt_meta_path).exists():
+        try:
+            meta = {"name": "metadata.json", "parents": [yt_folder_id]}
+            media = MediaFileUpload(yt_meta_path, mimetype="application/json", resumable=False)
+            f = service.files().create(body=meta, media_body=media, fields="id").execute()
+            _share_anyone(service, f["id"])
+            uploaded.append("youtube/metadata.json")
+        except Exception as e:
+            errors.append(f"youtube/metadata.json: {e}")
+
+    # ── Instagram ────────────────────────────────────────────────────
+    ig_folder_id = _get_or_create_folder(service, "instagram", date_folder_id)
+    ig_folder_link = f"https://drive.google.com/drive/folders/{ig_folder_id}"
+    ig_captions = copy_paths.get("instagram", {})
+
+    for short_type in ["hook", "dry_run", "code", "dialogue"]:
+        src_path = video_paths.get(f"short_{short_type}_portrait")
+        if src_path and Path(src_path).exists():
+            try:
+                dest_name = f"short_{short_type}.mp4"
+                meta = {"name": dest_name, "parents": [ig_folder_id]}
+                media = MediaFileUpload(src_path, mimetype="video/mp4", resumable=True)
+                f = service.files().create(body=meta, media_body=media, fields="id").execute()
+                _share_anyone(service, f["id"])
+                uploaded.append(f"instagram/{dest_name}")
+                print(f"[drive] instagram/{dest_name} ✓")
+            except Exception as e:
+                errors.append(f"instagram/short_{short_type}.mp4: {e}")
+
+        cap_path = ig_captions.get(short_type, "")
+        if cap_path and Path(cap_path).exists():
+            try:
+                caption_text = open(cap_path).read()
+                _upload_text(service, caption_text, f"caption_{short_type}.txt", ig_folder_id)
+                uploaded.append(f"instagram/caption_{short_type}.txt")
+            except Exception as e:
+                errors.append(f"instagram/caption_{short_type}.txt: {e}")
+
+    # ── LinkedIn ─────────────────────────────────────────────────────
+    li_folder_id = _get_or_create_folder(service, "linkedin", date_folder_id)
+    li_folder_link = f"https://drive.google.com/drive/folders/{li_folder_id}"
+
+    pdf_path = carousel_paths.get("pdf")
+    if pdf_path and Path(pdf_path).exists():
+        try:
+            meta = {"name": "carousel.pdf", "parents": [li_folder_id]}
+            media = MediaFileUpload(pdf_path, mimetype="application/pdf", resumable=False)
+            f = service.files().create(body=meta, media_body=media, fields="id").execute()
+            _share_anyone(service, f["id"])
+            uploaded.append("linkedin/carousel.pdf")
+            print(f"[drive] linkedin/carousel.pdf ✓")
+        except Exception as e:
+            errors.append(f"linkedin/carousel.pdf: {e}")
+
+    li_cap_path = copy_paths.get("linkedin")
+    if li_cap_path and Path(li_cap_path).exists():
+        try:
+            _upload_text(service, open(li_cap_path).read(), "caption.txt", li_folder_id)
+            uploaded.append("linkedin/caption.txt")
+        except Exception as e:
+            errors.append(f"linkedin/caption.txt: {e}")
+
+    status = "partial" if errors else "success"
+    print(f"[drive] Done — {len(uploaded)} files uploaded, {len(errors)} errors")
+    return {
+        "status": status,
+        "date_folder_link": date_folder_link,
+        "youtube_folder_link": yt_folder_link,
+        "instagram_folder_link": ig_folder_link,
+        "linkedin_folder_link": li_folder_link,
+        "uploaded": uploaded,
+        "errors": errors,
     }
