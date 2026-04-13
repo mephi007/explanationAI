@@ -8,14 +8,13 @@ import os
 import re
 import json
 import anthropic
-from google import genai
-from google.genai import types
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from gemini_client import get_client, types
+GEMINI_MODEL = "gemini-1.5-flash"  # alias kept for local references
 
-GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-
-_client = genai.Client(api_key=GEMINI_API_KEY)
-GEMINI_MODEL = "gemini-1.5-flash"
 
 # Claude Haiku for quality gate (~₹0.5/day)
 claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
@@ -71,7 +70,7 @@ Instagram short caption rules:
 
 
 def _gemini_generate(system: str, prompt: str, max_tokens: int = 1024) -> str:
-    resp = _client.models.generate_content(
+    resp = get_client().models.generate_content(
         model=GEMINI_MODEL,
         contents=prompt,
         config=types.GenerateContentConfig(

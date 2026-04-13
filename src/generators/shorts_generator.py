@@ -12,12 +12,10 @@ Short types:
 import os
 import re
 import json
-from google import genai
-from google.genai import types
-
-GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-_client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL = "gemini-1.5-flash"
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from gemini_client import get_client, types, MODEL
 
 # ─── Shared Manim spec injected into every prompt ────────────────────────────
 MANIM_SPEC = """
@@ -98,7 +96,7 @@ Structure:
 # ─── Generator ────────────────────────────────────────────────────────────────
 
 def _call_gemini(system: str, user: str) -> str:
-    resp = _client.models.generate_content(
+    resp = get_client().models.generate_content(
         model=MODEL,
         contents=user,
         config=types.GenerateContentConfig(

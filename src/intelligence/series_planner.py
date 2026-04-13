@@ -8,13 +8,11 @@ import os
 import json
 import re
 from datetime import date, timedelta
-from google import genai
-from google.genai import types
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from gemini_client import get_client, types, MODEL
 import db
-
-GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-_client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL = "gemini-1.5-flash"
 
 DEPTH_THRESHOLD = 7   # >= this → multi-part series
 
@@ -72,7 +70,7 @@ Return ONLY valid JSON array:
   ...
 ]"""
 
-    resp = _client.models.generate_content(
+    resp = get_client().models.generate_content(
         model=MODEL,
         contents=prompt,
         config=types.GenerateContentConfig(
