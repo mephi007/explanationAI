@@ -11,8 +11,7 @@ import anthropic
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from gemini_client import get_client, types
-GEMINI_MODEL = "gemini-1.5-flash"  # alias kept for local references
+from gemini_client import generate_content
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
@@ -70,16 +69,7 @@ Instagram short caption rules:
 
 
 def _gemini_generate(system: str, prompt: str, max_tokens: int = 1024) -> str:
-    resp = get_client().models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=system,
-            temperature=0.75,
-            max_output_tokens=max_tokens,
-        ),
-    )
-    return resp.text.strip()
+    return generate_content(system, prompt, temperature=0.75, max_tokens=max_tokens)
 
 
 def _claude_review(draft: str, platform: str, question: dict) -> str:

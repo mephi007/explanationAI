@@ -10,7 +10,7 @@ import json
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from gemini_client import get_client, types, MODEL
+from gemini_client import generate_content
 
 LONGFORM_SYSTEM = """You are an expert Manim scriptwriter for long-form DSA/System Design educational videos.
 Style: 3Blue1Brown whiteboard — clean, deliberate, every animation serves understanding.
@@ -86,17 +86,7 @@ Java code:
 
 The class must be named `LongFormScene`."""
 
-    resp = get_client().models.generate_content(
-        model=MODEL,
-        contents=user_prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=LONGFORM_SYSTEM,
-            temperature=0.25,
-            max_output_tokens=8192,
-        ),
-    )
-
-    script = resp.text.strip()
+    script = generate_content(LONGFORM_SYSTEM, user_prompt, temperature=0.25, max_tokens=8192)
     # Strip any accidental markdown
     script = re.sub(r'^```python\n?', '', script)
     script = re.sub(r'^```\n?', '', script)

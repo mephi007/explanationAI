@@ -22,7 +22,7 @@ from datetime import datetime
 import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).parent.parent))
-from gemini_client import get_client, types
+from gemini_client import generate_content
 
 KOKORO_VOICE_A = os.environ.get("KOKORO_VOICE_A", "am_adam")      # interviewer / narrator
 KOKORO_VOICE_B = os.environ.get("KOKORO_VOICE_B", "af_heart")     # candidate / secondary
@@ -111,15 +111,8 @@ Topic: {part['short_angles']['dialogue']}
 Keep each line under 20 words.""",
     }
 
-    resp = get_client().models.generate_content(
-        model="gemini-1.5-flash",
-        contents=prompts.get(short_type, prompts["dry_run"]),
-        config=types.GenerateContentConfig(
-            temperature=0.5,
-            max_output_tokens=512,
-        ),
-    )
-    return resp.text.strip()
+    return generate_content("", prompts.get(short_type, prompts["dry_run"]),
+                            temperature=0.5, max_tokens=512)
 
 
 def synthesize_voice(voiceover_text: str, output_path: str,

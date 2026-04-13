@@ -11,7 +11,7 @@ from datetime import date, timedelta
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from gemini_client import get_client, types, MODEL
+from gemini_client import generate_content
 import db
 
 DEPTH_THRESHOLD = 7   # >= this → multi-part series
@@ -29,9 +29,8 @@ def plan_series(question: dict) -> list[dict]:
         return [_single_part(question)]
 
     # Deep: ask Gemini to plan N parts
-    prompt = f"""You are a content strategist for a DSA YouTube channel targeting FAANG aspirants in India.
-
-Question: {question['title']}
+    system = "You are a content strategist for a DSA YouTube channel targeting FAANG aspirants in India."
+    prompt = f"""Question: {question['title']}
 Category: {question['category']}
 Pattern: {question.get('pattern','')}
 Depth score: {depth}/10
@@ -70,15 +69,7 @@ Return ONLY valid JSON array:
   ...
 ]"""
 
-    resp = get_client().models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0.4,
-            max_output_tokens=2048,
-        ),
-    )
-    raw = resp.text.strip()
+    raw = generate_content(system, prompt, temperature=0.4, max_tokens=2048)
     raw = re.sub(r'^```json\n?', '', raw)
     raw = re.sub(r'^```\n?', '', raw)
     raw = re.sub(r'\n?```$', '', raw)

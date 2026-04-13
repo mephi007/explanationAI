@@ -15,7 +15,7 @@ import json
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from gemini_client import get_client, types, MODEL
+from gemini_client import generate_content
 
 # ─── Shared Manim spec injected into every prompt ────────────────────────────
 MANIM_SPEC = """
@@ -96,16 +96,7 @@ Structure:
 # ─── Generator ────────────────────────────────────────────────────────────────
 
 def _call_gemini(system: str, user: str) -> str:
-    resp = get_client().models.generate_content(
-        model=MODEL,
-        contents=user,
-        config=types.GenerateContentConfig(
-            system_instruction=system,
-            temperature=0.3,
-            max_output_tokens=4096,
-        ),
-    )
-    raw = resp.text.strip()
+    raw = generate_content(system, user, temperature=0.3, max_tokens=4096)
     raw = re.sub(r'^```python\n?', '', raw)
     raw = re.sub(r'^```\n?', '', raw)
     raw = re.sub(r'\n?```$', '', raw)
