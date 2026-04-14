@@ -31,6 +31,13 @@ _GROQ_URL        = "https://api.groq.com/openai/v1/chat/completions"
 _client: genai.Client | None = None
 
 
+def _merge_system_prompt(system: str, prompt: str) -> str:
+    s = (system or "").strip()
+    if not s:
+        return prompt
+    return f"{s}\n\n---\n\n{prompt}"
+
+
 def get_client() -> genai.Client:
     global _client
     if _client is None:
@@ -55,11 +62,11 @@ def generate_content(
     All generators should call this instead of get_client() directly.
     """
     try:
-        contents = _merge_system_user(system, prompt)
         resp = get_client().models.generate_content(
             model=MODEL,
-            contents=contents,
+            contents=prompt,
             config=types.GenerateContentConfig(
+                system_instruction=system,
                 temperature=temperature,
                 max_output_tokens=max_tokens,
             ),
