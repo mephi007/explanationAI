@@ -55,11 +55,11 @@ def generate_content(
     All generators should call this instead of get_client() directly.
     """
     try:
+        contents = _merge_system_user(system, prompt)
         resp = get_client().models.generate_content(
             model=MODEL,
-            contents=prompt,
+            contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=system,
                 temperature=temperature,
                 max_output_tokens=max_tokens,
             ),
