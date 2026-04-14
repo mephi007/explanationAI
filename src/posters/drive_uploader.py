@@ -80,9 +80,35 @@ def _get_drive_service():
     sa_info = json.loads(SERVICE_ACCOUNT_JSON())
     creds = service_account.Credentials.from_service_account_info(
         sa_info,
-        scopes=["https://www.googleapis.com/auth/drive.file"],
+        # Use full Drive scope so service account can access explicitly shared folders.
+        scopes=["https://www.googleapis.com/auth/drive"],
     )
     return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
+def _service_account_email() -> str:
+    try:
+        return json.loads(SERVICE_ACCOUNT_JSON()).get("client_email", "service-account")
+    except Exception:
+        return "service-account"
+
+
+def _assert_root_access(service, root_id: str) -> None:
+    """Validate that service account can read the configured root folder."""
+    try:
+        service.files().get(
+            fileId=root_id,
+            fields="id,name",
+            supportsAllDrives=True,
+        ).execute()
+    except Exception as e:
+        email = _service_account_email()
+        raise RuntimeError(
+            "Google Drive root folder not accessible. "
+            f"Share folder '{root_id}' with service account '{email}' "
+            "as Editor (or place it in a shared drive where this account has access). "
+            f"Original error: {e}"
+        ) from e
 
 
 def _get_or_create_folder(service, name: str, parent_id: str) -> str:
@@ -91,7 +117,12 @@ def _get_or_create_folder(service, name: str, parent_id: str) -> str:
         f"name='{name}' and mimeType='application/vnd.google-apps.folder' "
         f"and '{parent_id}' in parents and trashed=false"
     )
-    results = service.files().list(q=query, fields="files(id)").execute()
+    results = service.files().list(
+        q=query,
+        fields="files(id)",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+    ).execute()
     files = results.get("files", [])
     if files:
         return files[0]["id"]
@@ -101,7 +132,11 @@ def _get_or_create_folder(service, name: str, parent_id: str) -> str:
         "mimeType": "application/vnd.google-apps.folder",
         "parents": [parent_id],
     }
-    folder = service.files().create(body=meta, fields="id").execute()
+    folder = service.files().create(
+        body=meta,
+        fields="id",
+        supportsAllDrives=True,
+    ).execute()
     return folder["id"]
 
 
@@ -110,6 +145,7 @@ def _share_anyone(service, file_id: str):
     service.permissions().create(
         fileId=file_id,
         body={"type": "anyone", "role": "reader"},
+        supportsAllDrives=True,
     ).execute()
 
 
@@ -120,7 +156,7 @@ def _upload_binary(service, file_path: str, folder_id: str, mime_type: str) -> d
     meta = {"name": Path(file_path).name, "parents": [folder_id]}
     media = MediaFileUpload(file_path, mimetype=mime_type, resumable=True)
     uploaded = service.files().create(
-        body=meta, media_body=media, fields="id,name,webViewLink"
+        body=meta, media_body=media, fields="id,name,webViewLink", supportsAllDrives=True
     ).execute()
     _share_anyone(service, uploaded["id"])
     return uploaded
@@ -135,7 +171,7 @@ def _upload_text(service, content: str, filename: str, folder_id: str) -> dict:
         io.BytesIO(content.encode("utf-8")), mimetype="text/plain", resumable=False
     )
     uploaded = service.files().create(
-        body=meta, media_body=media, fields="id,name,webViewLink"
+        body=meta, media_body=media, fields="id,name,webViewLink", supportsAllDrives=True
     ).execute()
     _share_anyone(service, uploaded["id"])
     return uploaded
@@ -167,6 +203,7 @@ def upload_instagram_content(
         raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON env var is not set")
 
     service = _get_drive_service()
+    _assert_root_access(service, root_id)
 
     # Create/find the date sub-folder
     date_folder_id = _get_or_create_folder(service, date_str, root_id)
@@ -222,6 +259,7 @@ def upload_all_to_drive(
     from googleapiclient.http import MediaFileUpload
 
     service = _get_drive_service()
+    _assert_root_access(service, root_id)
     uploaded = []
     errors = []
 
@@ -246,7 +284,9 @@ def upload_all_to_drive(
             try:
                 meta = {"name": dest_name, "parents": [yt_folder_id]}
                 media = MediaFileUpload(src_path, mimetype="video/mp4", resumable=True)
-                f = service.files().create(body=meta, media_body=media, fields="id").execute()
+                f = service.files().create(
+                    body=meta, media_body=media, fields="id", supportsAllDrives=True
+                ).execute()
                 _share_anyone(service, f["id"])
                 uploaded.append(f"youtube/{dest_name}")
                 print(f"[drive] youtube/{dest_name} ✓")
@@ -258,7 +298,9 @@ def upload_all_to_drive(
         try:
             meta = {"name": "thumbnail.jpg", "parents": [yt_folder_id]}
             media = MediaFileUpload(thumb_path, mimetype="image/jpeg", resumable=False)
-            f = service.files().create(body=meta, media_body=media, fields="id").execute()
+            f = service.files().create(
+                body=meta, media_body=media, fields="id", supportsAllDrives=True
+            ).execute()
             _share_anyone(service, f["id"])
             uploaded.append("youtube/thumbnail.jpg")
         except Exception as e:
@@ -269,7 +311,9 @@ def upload_all_to_drive(
         try:
             meta = {"name": "metadata.json", "parents": [yt_folder_id]}
             media = MediaFileUpload(yt_meta_path, mimetype="application/json", resumable=False)
-            f = service.files().create(body=meta, media_body=media, fields="id").execute()
+            f = service.files().create(
+                body=meta, media_body=media, fields="id", supportsAllDrives=True
+            ).execute()
             _share_anyone(service, f["id"])
             uploaded.append("youtube/metadata.json")
         except Exception as e:
@@ -287,7 +331,9 @@ def upload_all_to_drive(
                 dest_name = f"short_{short_type}.mp4"
                 meta = {"name": dest_name, "parents": [ig_folder_id]}
                 media = MediaFileUpload(src_path, mimetype="video/mp4", resumable=True)
-                f = service.files().create(body=meta, media_body=media, fields="id").execute()
+                f = service.files().create(
+                    body=meta, media_body=media, fields="id", supportsAllDrives=True
+                ).execute()
                 _share_anyone(service, f["id"])
                 uploaded.append(f"instagram/{dest_name}")
                 print(f"[drive] instagram/{dest_name} ✓")
@@ -312,7 +358,9 @@ def upload_all_to_drive(
         try:
             meta = {"name": "carousel.pdf", "parents": [li_folder_id]}
             media = MediaFileUpload(pdf_path, mimetype="application/pdf", resumable=False)
-            f = service.files().create(body=meta, media_body=media, fields="id").execute()
+            f = service.files().create(
+                body=meta, media_body=media, fields="id", supportsAllDrives=True
+            ).execute()
             _share_anyone(service, f["id"])
             uploaded.append("linkedin/carousel.pdf")
             print(f"[drive] linkedin/carousel.pdf ✓")

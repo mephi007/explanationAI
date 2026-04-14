@@ -29,13 +29,15 @@ def _send(method: str, **kwargs) -> dict:
     return resp.json()
 
 
-def send_text(text: str, parse_mode: str = "Markdown") -> int:
+def send_text(text: str, parse_mode: str | None = "Markdown") -> int:
     """Send text message, return message_id."""
-    result = _send("sendMessage", json={
+    payload = {
         "chat_id": CHAT_ID,
         "text": text,
-        "parse_mode": parse_mode,
-    })
+    }
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
+    result = _send("sendMessage", json=payload)
     return result["result"]["message_id"]
 
 
@@ -235,14 +237,15 @@ def send_error_alert(platform: str, error: str, cal_date: str, manual_url: str =
     if not BOT_TOKEN or not CHAT_ID:
         return
     text = (
-        f"🚨 *Posting Failed — {platform.title()}*\n\n"
+        f"Posting failed - {platform}\n\n"
         f"Date: {cal_date}\n"
         f"Error: {error[:300]}\n\n"
         f"{'Manual upload: ' + manual_url if manual_url else 'Check GitHub Actions logs.'}\n\n"
-        f"Reply /retry\\_{platform.lower()} to retry."
+        f"Reply /retry_{platform.lower().replace(' ', '_')} to retry."
     )
     try:
-        send_text(text)
+        # Send as plain text to avoid markdown parse errors from raw exception strings.
+        send_text(text, parse_mode=None)
     except Exception as e:
         print(f"[telegram] Alert send failed: {e}")
 

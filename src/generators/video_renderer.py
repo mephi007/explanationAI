@@ -197,6 +197,7 @@ def render_manim(script_path: str, class_name: str,
                  output_dir: str, quality: str = "m") -> str:
     """Run Manim renderer. Returns path to output MP4."""
     os.makedirs(output_dir, exist_ok=True)
+    script_abs = os.path.abspath(script_path)
 
     cmd = [
         "manim",
@@ -204,13 +205,14 @@ def render_manim(script_path: str, class_name: str,
         "--fps", "30",
         "--output_file", f"{class_name}.mp4",
         "--media_dir", output_dir,
-        script_path,
+        script_abs,
         class_name,
     ]
 
     print(f"[manim] Rendering {class_name} from {Path(script_path).name}...")
-    result = subprocess.run(cmd, capture_output=True, text=True,
-                            cwd=os.path.dirname(script_path) or ".")
+    # Run from current working dir and pass absolute script path to avoid
+    # duplicated relative-path resolution like ".../scripts/output/.../scripts/...".
+    result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
         print(f"[manim] STDERR (last 2000 chars):\n{result.stderr[-2000:]}")
