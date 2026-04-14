@@ -103,6 +103,57 @@ def _call_gemini(system: str, user: str) -> str:
     return raw.strip()
 
 
+def _fallback_short_script(title: str, short_type: str) -> str:
+    """Deterministic safe fallback when LLM output is malformed/unsafe."""
+    msg = {
+        "hook": "Most candidates miss this in interviews.",
+        "dry_run": "Let's visualize the key steps clearly.",
+        "code": "Clean interview-ready structure below.",
+        "dialogue": "Interviewer expects this exact insight.",
+    }.get(short_type, "Focus on the core pattern.")
+    return f'''from manim import *
+from manim_dsa import *
+
+class MainScene(Scene):
+    def construct(self):
+        title = Text("{title}", font_size=42)
+        subtitle = Text("{msg}", font_size=28).next_to(title, DOWN)
+        self.play(Write(title))
+        self.play(FadeIn(subtitle))
+        self.wait(1.0)
+'''
+
+
+def _is_safe_manim_script(script: str) -> bool:
+    """
+    Guardrail: only allow straightforward scene scripts.
+    Prevent generated code from importing/running project pipeline files.
+    """
+    required = [
+        "from manim import *",
+        "class MainScene(",
+    ]
+    for r in required:
+        if r not in script:
+            return False
+
+    blocked_fragments = [
+        "import main",
+        "from main import",
+        "if __name__ == \"__main__\"",
+        "subprocess.",
+        "os.system(",
+        "requests.",
+        "anthropic",
+        "generate_all_copy",
+    ]
+    lowered = script.lower()
+    for b in blocked_fragments:
+        if b.lower() in lowered:
+            return False
+    return True
+
+
 def generate_hook(question: dict, part: dict) -> str:
     prompt = f"""Generate the hook short animation for:
 Title: {question['title']}
@@ -174,6 +225,9 @@ def generate_all_shorts(question: dict, part: dict, output_dir: str) -> dict:
     ]:
         print(f"  [shorts] Generating {short_type}...")
         script = generator(question, part)
+        if not _is_safe_manim_script(script):
+            print(f"  [shorts] Unsafe/invalid script for {short_type}; using fallback template.")
+            script = _fallback_short_script(question["title"], short_type)
         path = os.path.join(output_dir, f"short_{short_type}.py")
         with open(path, "w") as f:
             f.write(script)

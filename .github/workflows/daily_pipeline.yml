@@ -79,6 +79,7 @@ jobs:
           LLM_MAX_BACKOFF_SECONDS: '90'
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           FALLBACK_MODEL: ${{ secrets.FALLBACK_MODEL || 'llama-3.3-70b-versatile' }}
+          USE_CLAUDE_REVIEW: 'false'
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}

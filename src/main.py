@@ -146,7 +146,7 @@ def run():
     print(f"  Carousel: {carousel_paths.get('pdf','no pdf')}")
 
     # ── Step 7: Generate all copy ────────────────────────────────────
-    banner("7/8", "Generating post copy (Gemini + Claude Haiku review)")
+    banner("7/8", "Generating post copy (Gemini + optional Claude review)")
     copy_dir = f"{OUTPUT_DIR}/copy"
     copy_paths = generate_all_copy(question, part, copy_dir)
 

@@ -14,9 +14,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from gemini_client import generate_content
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+USE_CLAUDE_REVIEW = os.environ.get("USE_CLAUDE_REVIEW", "false").lower() == "true"
 
-# Claude Haiku for quality gate (~₹0.5/day)
-claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
+# Claude is optional and disabled by default to keep zero-cost workflow stable.
+claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if (ANTHROPIC_API_KEY and USE_CLAUDE_REVIEW) else None
 
 # ─── Agent 3 rules (injected into EVERY prompt) ───────────────────────────────
 AGENT3 = """
@@ -101,12 +102,17 @@ TASK:
 
 Return ONLY the improved post text. No commentary."""
 
-    msg = claude.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return msg.content[0].text.strip()
+    try:
+        msg = claude.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return msg.content[0].text.strip()
+    except Exception as e:
+        # Non-fatal: if credits are low / API fails, continue with Gemini draft.
+        print(f"[copy] Claude review skipped ({platform}): {e}")
+        return draft
 
 
 def generate_linkedin_carousel_caption(question: dict, part: dict) -> str:
