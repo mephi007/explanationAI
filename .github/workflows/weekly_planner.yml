@@ -6,6 +6,10 @@ on:
     - cron: '30 23 * * 6'
   workflow_dispatch:
 
+concurrency:
+  group: weekly-planner
+  cancel-in-progress: false
+
 jobs:
   plan-and-refresh:
     runs-on: ubuntu-latest
@@ -68,6 +72,12 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'gemini-1.5-flash' }}
+          SWAP_ON_GEMINI_429: 'true'
+          GEMINI_MAX_RETRIES: '1'
+          GROQ_MAX_RETRIES: '6'
+          GEMINI_BACKOFF_BASE_SECONDS: '2'
+          GROQ_BACKOFF_BASE_SECONDS: '2'
+          LLM_MAX_BACKOFF_SECONDS: '90'
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           FALLBACK_MODEL: ${{ secrets.FALLBACK_MODEL || 'llama-3.3-70b-versatile' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
