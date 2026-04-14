@@ -77,7 +77,8 @@ def _synth_dialogue(text_a: str, text_b: str) -> np.ndarray:
 
 def generate_voiceover_text(question: dict, part: dict, short_type: str) -> str:
     """Use Gemini to write tight voiceover text for each short type."""
-    if not GEMINI_API_KEY:
+    has_any_llm_key = bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GROQ_API_KEY"))
+    if not has_any_llm_key:
         return f"Today we're looking at {question['title']}. Let's dive in."
 
     prompts = {
@@ -111,8 +112,17 @@ Topic: {part['short_angles']['dialogue']}
 Keep each line under 20 words.""",
     }
 
-    return generate_content("", prompts.get(short_type, prompts["dry_run"]),
-                            temperature=0.5, max_tokens=512)
+    try:
+        return generate_content(
+            "",
+            prompts.get(short_type, prompts["dry_run"]),
+            temperature=0.5,
+            max_tokens=512,
+        )
+    except Exception as e:
+        # Non-fatal: keep render pipeline alive with deterministic fallback text.
+        print(f"[render] Voiceover LLM unavailable ({short_type}): {e}")
+        return f"Today we're looking at {question['title']}. Let's dive in."
 
 
 def synthesize_voice(voiceover_text: str, output_path: str,
