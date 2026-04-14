@@ -37,7 +37,8 @@ import telegram_bot as tg
 
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
 VIDEO_ONLY = os.environ.get("VIDEO_ONLY", "false").lower() == "true"  # For parallel render step
-TODAY = os.environ.get("OVERRIDE_DATE", date.today().isoformat())
+_OVERRIDE_DATE = os.environ.get("OVERRIDE_DATE", "").strip()
+TODAY = _OVERRIDE_DATE or date.today().isoformat()
 OUTPUT_DIR = os.path.join("output", TODAY)
 
 

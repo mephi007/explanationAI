@@ -32,8 +32,8 @@ from posters.linkedin_poster import post_linkedin_carousel
 from posters.drive_uploader import upload_instagram_content
 from posters.youtube_poster import post_youtube_video
 
-TODAY = os.environ.get("OVERRIDE_DATE", date.today().isoformat())
-SLOT = os.environ.get("PLATFORM_SLOT", "all")  # morning|linkedin|noon|afternoon|evening|all
+_OVERRIDE_DATE = os.environ.get("OVERRIDE_DATE", "").strip()
+TODAY = _OVERRIDE_DATE or date.today().isoformat()staSLOT = os.environ.get("PLATFORM_SLOT", "all")  # morning|linkedin|noon|afternoon|evening|all
 
 
 def post_slot(slot: str, question: dict, part: dict, video_paths: dict,

@@ -31,10 +31,45 @@ Folder layout inside GOOGLE_DRIVE_FOLDER_ID:
 import io
 import json
 import os
+import re
 from pathlib import Path
 
 DRIVE_FOLDER_ID       = lambda: os.environ.get("GOOGLE_DRIVE_FOLDER_ID", "")
 SERVICE_ACCOUNT_JSON  = lambda: os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+
+
+def _extract_folder_id(value: str) -> str:
+    """
+    Accept either a raw Drive folder ID or a full Drive URL.
+    Returns normalized folder ID.
+    """
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+
+    # Already an ID in most cases.
+    if "/" not in raw and "?" not in raw:
+        return raw
+
+    # Common Drive URL forms:
+    # - https://drive.google.com/drive/folders/<ID>
+    # - https://drive.google.com/open?id=<ID>
+    m = re.search(r"/folders/([A-Za-z0-9_-]+)", raw)
+    if m:
+        return m.group(1)
+
+    m = re.search(r"[?&]id=([A-Za-z0-9_-]+)", raw)
+    if m:
+        return m.group(1)
+
+    return raw
+
+
+def _root_folder_id() -> str:
+    folder_id = _extract_folder_id(DRIVE_FOLDER_ID())
+    if not folder_id:
+        raise RuntimeError("GOOGLE_DRIVE_FOLDER_ID env var is not set")
+    return folder_id
 
 
 def _get_drive_service():
@@ -127,15 +162,14 @@ def upload_instagram_content(
             "folder_link": <Drive folder URL>,
         }
     """
-    if not DRIVE_FOLDER_ID():
-        raise RuntimeError("GOOGLE_DRIVE_FOLDER_ID env var is not set")
+    root_id = _root_folder_id()
     if not SERVICE_ACCOUNT_JSON():
         raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON env var is not set")
 
     service = _get_drive_service()
 
     # Create/find the date sub-folder
-    date_folder_id = _get_or_create_folder(service, date_str, DRIVE_FOLDER_ID())
+    date_folder_id = _get_or_create_folder(service, date_str, root_id)
 
     # Upload MP4
     print(f"[drive] Uploading {short_type} video ({Path(video_path).name})...")
@@ -181,8 +215,7 @@ def upload_all_to_drive(
             "errors": [list of error strings],
         }
     """
-    if not DRIVE_FOLDER_ID():
-        raise RuntimeError("GOOGLE_DRIVE_FOLDER_ID env var is not set")
+    root_id = _root_folder_id()
     if not SERVICE_ACCOUNT_JSON():
         raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON env var is not set")
 
@@ -193,7 +226,7 @@ def upload_all_to_drive(
     errors = []
 
     # ── Root date folder ─────────────────────────────────────────────
-    date_folder_id = _get_or_create_folder(service, cal_date, DRIVE_FOLDER_ID())
+    date_folder_id = _get_or_create_folder(service, cal_date, root_id)
     date_folder_link = f"https://drive.google.com/drive/folders/{date_folder_id}"
     print(f"[drive] Date folder: {date_folder_link}")
 
